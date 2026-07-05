@@ -1,0 +1,19 @@
+[project]
+name = "statusforge"
+version = "0.1.0"
+description = "Auditable Red/Amber/Green for cross-team programs — deterministic engine owns the color, the LLM only narrates."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# The interactive app + real-LLM narrator. Tests/CI don't need these (fully offline).
+app = ["streamlit>=1.36", "pandas>=2.0", "litellm>=1.70"]
+dev = ["pytest>=7.0", "matplotlib>=3.7", "scikit-learn>=1.3", "numpy>=1.24"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

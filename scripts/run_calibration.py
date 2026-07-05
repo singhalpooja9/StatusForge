@@ -11,7 +11,12 @@ measure narrative faithfulness. Writes docs/calibration.md + docs/calibration.pn
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
+
+# Make the package importable when run as `python scripts/run_calibration.py`
+# from the repo root (no PYTHONPATH needed — works in CI and locally).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from statusforge.dataset import load_gold
 from statusforge.extract import extract_signals, LLMConfig, OFFLINE
