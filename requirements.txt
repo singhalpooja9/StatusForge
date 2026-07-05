@@ -1,0 +1,8 @@
+# StatusForge — runtime deps for Streamlit Community Cloud.
+# Core app + engine run fully offline (mock narrator), no API key needed.
+streamlit>=1.36
+pydantic>=2.0
+pandas>=2.0
+# Optional: real LLM narrator via LiteLLM (only used when an API key is set).
+litellm>=1.70
+# Calibration script (dev) also uses: matplotlib, scikit-learn (see requirements-dev.txt)

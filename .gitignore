@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+.coverage
+
+# Secrets — NEVER commit. App runs offline without any of these.
+.env
+.env.*
+*.env
+*token*.json
+*secret*
+.streamlit/secrets.toml
+
+# OS
+.DS_Store

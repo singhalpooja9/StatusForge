@@ -1,0 +1,20 @@
+{"team": "Checkout", "text": "2 open P1s on the payment retry path. Critical path slipped 6 days. 3 of 5 milestones hit.", "human_color": "Red"}
+{"team": "Identity", "text": "On track. All 4 milestones hit this sprint, no blockers, scope stable.", "human_color": "Green"}
+{"team": "Data Platform", "text": "1 blocked dependency on the schema migration, owner assigned. Slipped 2 days. Scope +8%.", "human_color": "Amber"}
+{"team": "Notifications", "text": "Scope moved +30% after the new compliance ask landed mid-sprint. No P1s yet.", "human_color": "Red"}
+{"team": "Search", "text": "Healthy. 3 of 3 milestones hit, no blocked dependencies.", "human_color": "Green"}
+{"team": "Billing", "text": "1 blocked dependency with no owner on the tax service. Otherwise fine.", "human_color": "Red"}
+{"team": "Onboarding", "text": "Missed 2 of 5 milestones this sprint. No P1s, no blockers.", "human_color": "Amber"}
+{"team": "Fraud", "text": "1 open P1 on the model scoring endpoint. Milestones on track.", "human_color": "Red"}
+{"team": "Mobile", "text": "Slipped 3 days on the release-candidate build. 2 blocked deps, both owned.", "human_color": "Amber"}
+{"team": "Infra", "text": "Green across the board, 5 of 5 milestones, scope steady, zero blockers.", "human_color": "Green"}
+{"team": "Analytics", "text": "Scope trimmed by 12% to hit the date. No P1s. 4 of 4 milestones hit.", "human_color": "Amber"}
+{"team": "Support Tools", "text": "Critical path slipped 8 days waiting on the vendor API. 1 P1 open.", "human_color": "Red"}
+{"team": "Growth", "text": "All milestones hit, no blockers, scope stable. Smooth sprint.", "human_color": "Green"}
+{"team": "Payments Infra", "text": "3 blocked dependencies, all with named owners. Slipped 2 days.", "human_color": "Amber"}
+{"team": "Compliance", "text": "1 unowned blocked dependency on the audit log. Escalating.", "human_color": "Red"}
+{"team": "Content", "text": "On track, 3 of 3 milestones, no issues.", "human_color": "Green"}
+{"team": "Partner API", "text": "Scope +15% mid-sprint, 1 owned blocked dep. No P1s.", "human_color": "Amber"}
+{"team": "Ledger", "text": "2 open P1s on reconciliation. Slipped 5 days. This is bad.", "human_color": "Red"}
+{"team": "Design System", "text": "4 of 4 milestones hit, scope stable, no blockers.", "human_color": "Green"}
+{"team": "Localization", "text": "Missed 1 of 6 milestones. No P1s, no blockers, scope steady.", "human_color": "Green"}
