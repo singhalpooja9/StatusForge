@@ -1,0 +1,9 @@
+# CI/test-only deps. The test suite is fully OFFLINE and never imports litellm
+# (it's lazy-imported only on the real-LLM path, which CI doesn't exercise), so we
+# skip the heavy litellm dependency tree here for a fast, reliable install.
+pydantic>=2.0
+pyyaml>=6.0
+pytest>=7.0
+matplotlib>=3.7
+scikit-learn>=1.3
+numpy>=1.24
