@@ -27,5 +27,7 @@ jobs:
           pip install -r requirements-ci.txt
       - name: Run tests
         run: pytest -q
-      - name: Calibration smoke run (offline)
-        run: python scripts/run_calibration.py
+      - name: Calibration smoke run — both domains (offline)
+        run: |
+          python scripts/run_calibration.py --domain software
+          python scripts/run_calibration.py --domain marketing

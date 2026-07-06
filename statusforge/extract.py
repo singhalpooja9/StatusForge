@@ -1,13 +1,13 @@
-"""Signal extraction: raw team status text -> typed TeamSignals.
+"""Signal extraction: raw team status text -> validated signal dict.
 
-Two paths, same typed output:
-  * offline MOCK (default / no API key / CI): deterministic regex + keyword rules
-    that pull numbers out of a status blurb. Transparent and reproducible.
-  * real LLM via LiteLLM: asks the model to fill the TeamSignals schema as JSON.
+Two paths, same validated output:
+  * offline heuristic (default / no key / CI): deterministic regex/keyword reader.
+    Transparent and reproducible — but a demo prop; a human should confirm the
+    numbers in the UI (that's what the editable table is for).
+  * real LLM via LiteLLM: fills the rulebook's signal names as JSON.
 
-Either way the result is a strict TeamSignals object the deterministic engine
-consumes — the LLM never sees or sets the RAG color, only proposes the numbers,
-which a human can inspect and override in the UI.
+Either way the result is validated against the rulebook and fed to the pure engine
+— the LLM never sets the color, only proposes numbers a human can override.
 """
 
 from __future__ import annotations
@@ -16,87 +16,122 @@ import json
 import re
 from dataclasses import dataclass
 
-from .models import TeamSignals
+from .rulebook import Rulebook
+from .models import validate_signals
 
 
 @dataclass
 class LLMConfig:
-    """How to run the LLM narrator/extractor.
-
-    api_key is the VISITOR'S session key (or the owner's), passed per-call to
-    LiteLLM — never written to the environment. If api_key is empty, everything
-    runs on the deterministic offline path (the health color never needs an LLM).
-    """
+    """How to run the LLM narrator/extractor. api_key is passed PER CALL to LiteLLM,
+    never written to os.environ (Streamlit shares one process across visitors)."""
     model: str = "groq/llama-3.3-70b-versatile"
     api_key: str = ""
 
     @property
     def live(self) -> bool:
-        """True only when we have a key to make a real call."""
         return bool(self.api_key and self.api_key.strip())
 
 
-# The offline default: no key, deterministic mock everywhere.
 OFFLINE = LLMConfig(api_key="")
 
 
-# --------------------------------------------------------------- mock extract ---
+# --------------------------------------------------------------- offline read ---
 def _first_int(pattern: str, text: str, default: int = 0) -> int:
     m = re.search(pattern, text, re.IGNORECASE)
     return int(m.group(1)) if m else default
 
 
-def _mock_extract(team: str, text: str) -> TeamSignals:
-    """Deterministic keyword/regex extraction. Not clever — reproducible."""
+# Known software-domain signals get targeted regexes. For an arbitrary rulebook
+# signal we look for "<n> <signal words>" as a generic fallback.
+def _offline_extract(text: str, rb: Rulebook) -> dict:
     t = text.lower()
-    slip = _first_int(r"slip(?:ped|page)?[^0-9]{0,12}(\d+)\s*day", t)
-    if not slip:
-        slip = _first_int(r"(\d+)\s*day[s]?\s*(?:behind|late|slip)", t)
-    p1s = _first_int(r"(\d+)\s*(?:open\s*)?p1", t) or _first_int(r"(\d+)\s*sev[- ]?1", t)
-    blocked = _first_int(r"(\d+)\s*blocked", t)
-    ownerless = 0
-    if "no owner" in t or "unowned" in t or "ownerless" in t:
-        ownerless = max(1, _first_int(r"(\d+)\s*(?:unowned|ownerless)", t))
-    scope = 0.0
-    ms = re.search(r"scope[^0-9+-]{0,16}([+-]?\d+)\s*%", t)
-    if ms:
-        scope = float(ms.group(1))
-    total = _first_int(r"(\d+)\s*milestone", t)
-    hit = _first_int(r"(\d+)\s*(?:of|/)\s*\d+\s*milestone", t)
-    if total and hit > total:
-        hit = total
-    return TeamSignals(
-        team=team, critical_path_slip_days=slip, open_p1s=p1s,
-        blocked_dependencies=blocked, ownerless_blocked_deps=min(ownerless, blocked or ownerless),
-        scope_delta_pct=scope, milestones_total=total, milestones_hit=hit)
+    raw: dict[str, float] = {}
+
+    def has(sig: str) -> bool:
+        return sig in rb.signal_names
+
+    if has("critical_path_slip_days"):
+        slip = _first_int(r"slip(?:ped|page)?[^0-9]{0,12}(\d+)\s*day", t) \
+            or _first_int(r"(\d+)\s*day[s]?\s*(?:behind|late|slip)", t) \
+            or _first_int(r"behind[^0-9]{0,8}(\d+)\s*day", t)
+        raw["critical_path_slip_days"] = slip
+    if has("open_p1s"):
+        raw["open_p1s"] = _first_int(r"(\d+)\s*(?:open\s*)?p1", t) or _first_int(r"(\d+)\s*sev[- ]?1", t)
+    if has("blocked_dependencies"):
+        raw["blocked_dependencies"] = _first_int(r"(\d+)\s*blocked", t)
+    if has("ownerless_blocked_deps"):
+        raw["ownerless_blocked_deps"] = (
+            1 if ("no owner" in t or "unowned" in t or "ownerless" in t)
+            else _first_int(r"(\d+)\s*(?:unowned|ownerless)", t))
+    if has("scope_delta_pct"):
+        ms = re.search(r"scope[^0-9+-]{0,16}([+-]?\d+)\s*%", t)
+        raw["scope_delta_pct"] = float(ms.group(1)) if ms else 0.0
+    if has("milestones_total") or has("milestones_hit"):
+        raw.update(_extract_of_pair(t, "milestone", "milestones_total", "milestones_hit"))
+
+    # ---- marketing-domain signals (offline reader also handles this second domain) ----
+    if has("legal_approvals_pending"):
+        raw["legal_approvals_pending"] = _first_int(r"(\d+)\s*(?:legal|brand)?\s*approval", t)
+    if has("channels_blocked"):
+        raw["channels_blocked"] = _first_int(r"(\d+)\s*(?:launch\s*)?channel[s]?\s*blocked", t) \
+            or _first_int(r"(\d+)\s*blocked\s*channel", t)
+    if has("budget_overrun_pct"):
+        mo = re.search(r"budget\s*(\d+)\s*%\s*over", t)
+        mu = re.search(r"budget\s*(\d+)\s*%\s*under", t)
+        raw["budget_overrun_pct"] = float(mo.group(1)) if mo else (-float(mu.group(1)) if mu else 0.0)
+    if has("assets_total") or has("assets_ready"):
+        pair = _extract_of_pair(t, "asset", "assets_total", "assets_ready")
+        # "9 of 30 assets NOT ready" means ready = total - 9
+        mneg = re.search(r"(\d+)\s*(?:of|/)\s*(\d+)\s*(?:creative\s*)?assets?\s*not\s*ready", t)
+        if mneg:
+            not_ready, total = int(mneg.group(1)), int(mneg.group(2))
+            pair = {"assets_total": total, "assets_ready": total - not_ready}
+        raw.update(pair)
+    if has("days_to_launch"):
+        raw["days_to_launch"] = _first_int(r"(\d+)\s*days?\s*(?:to|out|until|before)", t)
+
+    # generic fallback for any other declared signal: "<n> <first word of name>"
+    for sig in rb.signals:
+        if sig.name in raw:
+            continue
+        word = sig.name.split("_")[0]
+        raw[sig.name] = _first_int(rf"(\d+)\s*{re.escape(word)}", t)
+    return raw
 
 
-# --------------------------------------------------------------- real extract ---
-_EXTRACT_INSTRUCTIONS = (
-    "Extract program-health SIGNALS from a team's status update. Return ONLY JSON "
-    "with integer/number fields: critical_path_slip_days, open_p1s, "
-    "blocked_dependencies, ownerless_blocked_deps, scope_delta_pct, "
-    "milestones_total, milestones_hit. Use 0 when unstated. Do NOT judge health or "
-    "assign any color — only pull the numbers."
-)
+def _extract_of_pair(t: str, noun: str, total_key: str, hit_key: str) -> dict:
+    """'3 of 5 <noun>s' -> {total:5,hit:3}; 'all 4 <noun>s' -> {total:4,hit:4}."""
+    m = re.search(rf"(\d+)\s*(?:of|/)\s*(\d+)\s*(?:creative\s*)?{noun}", t)
+    if m:
+        hit, total = int(m.group(1)), int(m.group(2))
+    else:
+        total = _first_int(rf"(?:all\s*)?(\d+)\s*(?:creative\s*)?{noun}", t)
+        hit = total if ("all" in t and noun in t) else 0
+    return {total_key: total, hit_key: min(hit, total) if total else hit}
 
 
-def _real_extract(team: str, text: str, cfg: LLMConfig) -> TeamSignals:
-    import litellm  # lazy import; offline path needs no dependency
-    litellm.suppress_debug_info = True  # never print payloads/keys to logs
+# --------------------------------------------------------------- real read -----
+def _extract_instructions(rb: Rulebook) -> str:
+    fields = ", ".join(s.name for s in rb.signals)
+    return (
+        f"Extract program-health SIGNALS from a team's status update for the domain "
+        f"'{rb.domain}'. Return ONLY JSON with these numeric fields: {fields}. Use 0 "
+        f"when unstated. Do NOT judge health or assign any color — only pull the numbers.")
+
+
+def _real_extract(text: str, rb: Rulebook, cfg: LLMConfig) -> dict:
+    import litellm
+    litellm.suppress_debug_info = True
     resp = litellm.completion(
-        model=cfg.model,
-        api_key=cfg.api_key,   # per-call; NEVER via os.environ (shared-process leak)
+        model=cfg.model, api_key=cfg.api_key,
         messages=[
-            {"role": "system", "content": _EXTRACT_INSTRUCTIONS},
-            {"role": "user", "content": f"TEAM: {team}\nSTATUS:\n{text}"},
+            {"role": "system", "content": _extract_instructions(rb)},
+            {"role": "user", "content": text},
         ],
-        temperature=0,
+        temperature=0, max_tokens=300,
         response_format={"type": "json_object"},
     )
-    raw = _loads(resp["choices"][0]["message"]["content"])
-    raw["team"] = team
-    return TeamSignals(**raw)
+    return _loads(resp["choices"][0]["message"]["content"])
 
 
 def _loads(content: str) -> dict:
@@ -112,10 +147,11 @@ def _loads(content: str) -> dict:
         return json.loads(m.group(0))
 
 
-def extract_signals(team: str, text: str, cfg: LLMConfig | None = None) -> TeamSignals:
-    """Raw status text -> typed TeamSignals. Offline mock unless cfg has a key.
-    The LLM never sets the RAG color — only proposes numbers a human can override."""
+def extract_signals(text: str, rulebook: Rulebook, cfg: LLMConfig | None = None) -> dict[str, float]:
+    """Raw status text -> validated signal dict for the rulebook. LLM never sets color.
+
+    Note: extraction stays deterministic (offline) unless cfg.live AND you opt in;
+    the app keeps extraction offline even with the shared key so colors stay reproducible."""
     cfg = cfg or OFFLINE
-    if not cfg.live:
-        return _mock_extract(team, text)
-    return _real_extract(team, text, cfg)
+    raw = _real_extract(text, rulebook, cfg) if cfg.live else _offline_extract(text, rulebook)
+    return validate_signals(raw, rulebook)

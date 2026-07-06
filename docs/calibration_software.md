@@ -1,30 +1,28 @@
-# StatusForge Calibration
+# StatusForge Calibration — Software delivery
 
-> Engine color vs human label on the synthetic gold set. The engine's color is
-> computed by deterministic rules; the LLM only narrates. Offline mock unless a
-> provider key was set.
+> Engine color vs human label on the synthetic gold set. The color is computed by
+> the deterministic rulebook interpreter; the LLM only narrates.
 
 ## Headline
 ```
-n=20  exact-agreement=0.90  quadratic-weighted kappa=0.92
+n=20  exact-agreement=0.95  quadratic-weighted kappa=0.96
 DANGER RATE (truly-Red under-called)=0.00 (95% CI 0.00-0.35, n_red=7)
 confusion (rows=true, cols=pred Green/Amber/Red):
-  true Green |   5   2   0
+  true Green |   6   1   0
   true Amber |   0   6   0
   true Red   |   0   0   7
 narrative faithfulness = 1.00
 ```
 
-**Read honestly:** small gold set → wide CIs. The metric that matters most is the
-**danger rate** (truly-Red teams under-called) — it should be 0, and the narrative
-faithfulness should be 1.0 by construction (the LLM cannot change the color).
+**The metric that matters is the danger rate** (truly-Red under-called) — it should be 0.
+Small gold set → wide CIs; this demonstrates the method, not a production benchmark.
 
 ## Per-team
 
 | Team | Human | Engine |
 |---|---|---|
 | Checkout | Red | Red |
-| Identity | Green | Amber ⚠️ |
+| Identity | Green | Green |
 | Data Platform | Amber | Amber |
 | Notifications | Red | Red |
 | Search | Green | Green |

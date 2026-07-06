@@ -1,0 +1,74 @@
+# StatusForge rulebook — marketing launch (a NON-software domain).
+#
+# Same engine, same governance property — a completely different set of signals.
+# This is the proof that StatusForge generalizes: the code never changed, only this
+# rulebook. Signals here are creative-asset readiness, legal/brand approvals, budget
+# pacing, channel readiness — nothing software-specific.
+
+domain: Marketing launch
+
+signals:
+  - name: days_to_launch
+    label: "Days to launch"
+    help: "Calendar days until the launch date"
+  - name: assets_total
+    label: "Creative assets (total)"
+  - name: assets_ready
+    label: "Creative assets (ready)"
+  - name: legal_approvals_pending
+    label: "Legal/brand approvals pending"
+    help: "Approvals still outstanding (a pending approval near launch is Red)"
+  - name: budget_overrun_pct
+    label: "Budget overrun %"
+    help: "Spend vs. plan, percent over (+) or under (-)"
+    allow_negative: true
+  - name: channels_blocked
+    label: "Channels blocked"
+    help: "Launch channels not yet go (paid, email, PR, web)"
+
+rules:
+  # --- RED ---
+  - color: Red
+    signal: legal_approvals_pending
+    op: ">="
+    value: 1
+    reason: "{n} legal/brand approval(s) still pending"
+  - color: Red
+    signal: channels_blocked
+    op: ">="
+    value: 2
+    reason: "{n} launch channels blocked"
+  - color: Red
+    signal: budget_overrun_pct
+    op: ">="
+    value: 20
+    reason: "budget {n}% over plan (>= 20%)"
+  # --- AMBER ---
+  - color: Amber
+    signal: channels_blocked
+    op: ">="
+    value: 1
+    reason: "{n} launch channel blocked"
+  - color: Amber
+    signal: budget_overrun_pct
+    op: ">="
+    value: 8
+    reason: "budget {n}% over plan"
+
+# Asset readiness: Red if <60% ready, Amber if <85% ready. Reuses the miss-% derived rule
+# (miss_pct = 100*(total-ready)/total).
+derived_rules:
+  - color: Red
+    kind: milestone_miss_pct
+    total: assets_total
+    hit: assets_ready
+    op: ">="
+    value: 40
+    reason: "{n}% of creative assets not ready"
+  - color: Amber
+    kind: milestone_miss_pct
+    total: assets_total
+    hit: assets_ready
+    op: ">="
+    value: 15
+    reason: "{n}% of creative assets not ready"

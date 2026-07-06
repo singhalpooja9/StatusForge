@@ -1,0 +1,83 @@
+# StatusForge rulebook — software delivery (the default domain).
+#
+# A rulebook is DATA, not code: signals define the numeric inputs, rules map
+# thresholds to a color. The engine is a pure interpreter over this file, so the
+# Red/Amber/Green is auditable and reproducible — and you can point StatusForge at
+# any program by writing a different rulebook (see rulebooks/marketing.yaml).
+#
+# Operators are a fixed whitelist: >= <= > < == abs>= abs<=  (no expressions/eval).
+# A team goes RED if any red rule fires; else AMBER if any amber rule fires; else GREEN.
+
+domain: Software delivery
+
+signals:
+  - name: critical_path_slip_days
+    label: "Critical-path slip (days)"
+    help: "Days the deliverable has slipped on the critical path"
+  - name: open_p1s
+    label: "Open P1s"
+    help: "Open Sev-1 / P1 issues"
+  - name: blocked_dependencies
+    label: "Blocked deps"
+    help: "Dependencies currently blocked"
+  - name: ownerless_blocked_deps
+    label: "Ownerless blocked"
+    help: "Blocked dependencies with no named owner (worse than owned)"
+  - name: scope_delta_pct
+    label: "Scope Δ %"
+    help: "Scope change since baseline, percent (+ added / - cut)"
+    allow_negative: true
+  - name: milestones_total
+    label: "Milestones (total)"
+  - name: milestones_hit
+    label: "Milestones (hit)"
+
+rules:
+  # --- RED ---
+  - color: Red
+    signal: open_p1s
+    op: ">="
+    value: 1
+    reason: "{n} open P1(s)"
+  - color: Red
+    signal: critical_path_slip_days
+    op: ">="
+    value: 5
+    reason: "critical path slipped {n}d (>= 5d)"
+  - color: Red
+    signal: ownerless_blocked_deps
+    op: ">="
+    value: 1
+    reason: "{n} blocked dependency(ies) with no owner"
+  - color: Red
+    signal: scope_delta_pct
+    op: "abs>="
+    value: 25
+    reason: "scope moved {n}% (>= 25%)"
+  # --- AMBER ---
+  - color: Amber
+    signal: critical_path_slip_days
+    op: ">="
+    value: 2
+    reason: "critical path slipped {n}d"
+  - color: Amber
+    signal: blocked_dependencies
+    op: ">="
+    value: 1
+    reason: "{n} blocked dependency(ies)"
+  - color: Amber
+    signal: scope_delta_pct
+    op: "abs>="
+    value: 10
+    reason: "scope moved {n}%"
+
+# Derived-signal rules (computed from two signals) are declared here.
+# milestone_miss_pct = 100*(total-hit)/total ; Amber if >= 20%.
+derived_rules:
+  - color: Amber
+    kind: milestone_miss_pct
+    total: milestones_total
+    hit: milestones_hit
+    op: ">="
+    value: 20
+    reason: "missed {n}% of milestones"

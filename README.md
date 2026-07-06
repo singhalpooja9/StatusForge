@@ -1,134 +1,135 @@
 # StatusForge
 
-**A cross-team status roll-up where a deterministic rule engine sets Red/Amber/Green — the LLM only writes the narrative.**
+**Auditable Red/Amber/Green for any program — a deterministic rulebook owns the color, the LLM only narrates.**
 
 [![CI](https://github.com/singhalpooja9/StatusForge/actions/workflows/ci.yml/badge.svg)](https://github.com/singhalpooja9/StatusForge/actions/workflows/ci.yml)
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![status](https://img.shields.io/badge/status-working%20app%20%2B%20eval-5eead4)
 
-> Paste each team's raw status; a **deterministic engine** computes the program's
-> Red/Amber/Green from extracted signals, and the model *only* narrates it. The LLM
-> has **no numeric path to the color** — so the health call is auditable, reproducible,
-> and can never be argued up by generated prose.
+> A **deterministic rulebook interpreter** computes each team's Red/Amber/Green from numeric
+> signals; the model *only* writes the narrative. The LLM has **no numeric path to the color**
+> — so the health call is auditable, reproducible, unit-tested, and can never be argued up by
+> generated prose. Point it at a different **rulebook** (a YAML spec) and it grades a marketing
+> launch — or any program — with no code change.
 >
-> This is the weekly program-health dashboard I've run on real launches, rebuilt as
-> public code with the eval to back it. Synthetic data only; runs offline with no keys.
+> This is the weekly program-health dashboard rebuilt as public code, with the eval to back it.
+> Synthetic data only; the color path runs fully offline with no keys.
 
-**Live demo:** _(Streamlit Community Cloud — link after deploy)_ · works with no API key
-(deterministic engine + offline narrator); bring your own key in-app for live LLM prose.
+**Live demo:** _(Streamlit Community Cloud — link after deploy)._ Zero setup: a shared Groq key
+writes the prose (or an offline narrator if it's rate-limited); bring your own key to use instead.
+**The Red/Amber/Green is identical either way.**
 
 ---
 
-## Why it's built this way
+## The design in one idea
 
-On a weekly program review, the number that matters is the color: is this workstream
-**Red**? Letting an LLM *decide* that is a governance mistake — it can't be audited and it
-drifts. So StatusForge splits the job:
+On a program review, the number that matters is the **color** — is this workstream **Red**?
+Letting an LLM *decide* that is a governance mistake: it can't be audited and it drifts. So the
+job is split:
 
-- **A deterministic rule engine owns the color.** `Red/Amber/Green` is a pure function of
-  numeric signals (critical-path slip, open P1s, ownerless blocked deps, scope delta,
-  milestone miss). It's in one inspectable place and fully unit-tested.
-- **The LLM only narrates.** It's handed the color + the reasons the engine already fired,
-  and may only phrase them. A faithfulness check verifies the prose never claims a
-  different health level.
+- **A deterministic interpreter owns the color.** `Red/Amber/Green` is a pure function of numeric
+  signals and a **rulebook** — a whitelisted-operator YAML spec (`>=`, `abs>=`, …) with **no code
+  and no `eval`**. The engine loops the validated rules; malformed rulebooks **fail closed** (refuse
+  to run). Edit the rulebook to grade a different domain — the engine never changes.
+- **The LLM only narrates.** It's handed the color + the reasons the engine fired, and may only
+  phrase them. A faithfulness check verifies the prose never claims a different health level.
+- **A human confirms the numbers.** Extracted signals land in an **editable table** — the model
+  *proposes*, a human *corrects*, the engine *rules*.
 
-The model *proposes* the numbers during extraction (a human can override them); it never
-sets the verdict.
+## Configurable — one engine, any program
 
-## Quickstart
+The engine is domain-agnostic; the domain lives entirely in a rulebook:
+
+- [`rulebooks/software.yaml`](rulebooks/software.yaml) — slip days, open P1s, ownerless blocked deps, scope delta, milestone miss
+- [`rulebooks/marketing.yaml`](rulebooks/marketing.yaml) — legal approvals, channels blocked, budget overrun, creative-asset readiness
+
+Same code, same governance property, a completely different domain. Writing a `construction.yaml`
+or `research.yaml` is a data change, not a code change.
+
+## Quickstart (no API key needed)
 
 ```bash
 pip install -r requirements-dev.txt
 
-streamlit run app.py                          # the interactive roll-up (works with no key)
-pytest -q                                     # 27 tests, fully offline
-python scripts/run_calibration.py             # -> docs/calibration.md + chart (offline)
+streamlit run app.py                                  # the interactive app
+pytest -q                                             # 36 offline tests
+python scripts/run_calibration.py --domain software   # -> docs/calibration_software.{md,png}
+python scripts/run_calibration.py --domain marketing  # -> docs/calibration_marketing.{md,png}
 ```
 
-**No API key needed.** The deterministic engine computes every color, and an offline
-narrator writes the prose — so the whole demo runs with zero setup. A real LLM is
-*optional* and only changes the wording:
+The **colors are always deterministic and offline** — no key ever touches them. A real LLM only
+changes the *prose*, and resolves in this order: **your own key (BYOK) → shared Groq key → offline
+narrator**, with any live failure falling back to offline silently so the demo never breaks.
 
-- **In the app:** open the **"Use your own key"** tab, pick a provider (Groq / OpenRouter
-  are free), paste a key — it stays in your browser session only, never stored or logged,
-  and is passed straight to your provider. The Red/Amber/Green never changes.
-- **In the script (dev):** `export GROQ_API_KEY=… && python scripts/run_calibration.py --provider auto`.
+## Results (engine vs. human, per rulebook)
 
-LiteLLM routes to whatever provider your key matches (Groq, OpenRouter, OpenAI, Anthropic, Gemini).
+Classes are **ordinal** (Green < Amber < Red) and errors are **cost-asymmetric** — calling a
+truly-Red program Green is the catastrophic error — so the headline is the **danger rate**, not
+accuracy.
 
-## Results (offline mock, n=20 gold set)
+| Rulebook | exact | quad-κ | danger rate | faithfulness |
+|---|---|---|---|---|
+| Software (n=20) | 0.95 | 0.96 | **0.00** | 1.00 |
+| Marketing (n=16) | 0.69 | 0.79 | 0.33 | 1.00 |
 
-![calibration](docs/calibration.png)
-
-```
-n=20  exact-agreement=0.90  quadratic-weighted kappa=0.92
-DANGER RATE (truly-Red under-called)=0.00  (95% CI 0.00–0.35, n_red=7)
-narrative faithfulness = 1.00
-```
-
-Because the classes are **ordinal** (Green < Amber < Red) and the errors are
-**cost-asymmetric**, aggregate accuracy is the wrong headline. The two that matter:
-- **Danger rate = 0** — no truly-Red team was under-called (the catastrophic error). The
-  only misses are Green→Amber, i.e. *over*-caution — the safe direction.
-- **Narrative faithfulness = 1.0** — no generated line ever contradicts the engine's color,
-  by construction.
-
-> Honest note: n=20 → wide CIs (the danger-rate CI spans to 0.35 on 7 Red cases). The
-> gold set is synthetic and written to be unambiguous for the documented thresholds; it
-> demonstrates the *method*, not a production benchmark.
+**The honest engine-vs-extraction split:** the rulebook interpreter is *perfect* on both domains —
+every remaining marketing miss is the **offline free-text reader** failing to parse marketing prose,
+not an engine error. That's the point: the engine generalizes; a regex reader doesn't. For
+non-software domains the LLM extractor (or the editable table) closes the gap. Small gold sets → wide
+CIs; this demonstrates the method, not a production benchmark.
 
 ## What this demonstrates (concepts + stack)
 
 | Concept | Where |
 |---|---|
-| **Deterministic-engine + LLM-narrates** separation (LLM has no numeric path) | `engine.py`, `narrate.py` |
-| **Typed signal extraction** (schema the model fills; human-overridable) | `models.py`, `extract.py` (PydanticAI-style) |
-| **3-class ordinal, cost-asymmetric eval** | `calibration.py` — quadratic-weighted κ + confusion + Wilson CIs |
-| **Danger rate** (under-calling a truly-Red program) as the headline metric | `calibration.py` |
-| **Narrative faithfulness** (prose can't contradict the color) | `calibration.py` |
-| **Offline-first / deterministic CI** | mock extractor + narrator ⇒ green with no keys |
-| **Interactive delivery** | `app.py` (Streamlit) |
+| **Deterministic-engine + LLM-narrates** (LLM has no numeric path) | `engine.py`, `narrate.py` |
+| **Configurable rulebook interpreter** (data, not code; whitelisted operators; **fail-closed**) | `rulebook.py`, `rulebooks/*.yaml` |
+| **3-class ordinal, cost-asymmetric eval** | `calibration.py` — quadratic-weighted κ + danger-rate + Wilson CIs |
+| **Narrative faithfulness** (prose can't contradict the color) | `calibration.py`, live badge in the app |
+| **Human-in-the-loop override** (editable signal table) | `app.py` (`st.data_editor`) |
+| **Safe BYO-key** (session-only, per-call `api_key`, never `os.environ`) | `providers.py`, `extract.py` |
+| **Silent offline fallback + deterministic CI** | `narrate.py`, `requirements-ci.txt` (no litellm) |
 
-**Stack:** Python · Pydantic · Streamlit · LiteLLM (swappable providers) · pandas ·
-matplotlib · pytest + GitHub Actions.
+**Stack:** Python · Pydantic · PyYAML · Streamlit · LiteLLM (Groq/OpenRouter/OpenAI/Anthropic/Gemini) ·
+pandas · matplotlib · pytest + GitHub Actions.
 
 ## Deploy to Streamlit Community Cloud
 
-1. Push this repo to GitHub (public).
-2. On [share.streamlit.io](https://share.streamlit.io) → New app → point at `app.py`.
-3. **No secrets required** — it runs fully offline by default; visitors can bring their own
-   key in the app. (Optional: to give every visitor live LLM prose in the default view, add a
-   `GROQ_API_KEY` in the app's Secrets — a free Groq key — and consider rate-limiting it.)
+1. Push to GitHub (public).
+2. [share.streamlit.io](https://share.streamlit.io) → New app → point at `app.py`.
+3. **Optional shared key:** add `GROQ_API_KEY` under App → Settings → Secrets to give every visitor
+   live prose by default (free Groq key; rate-limited in-app). With no secret it runs offline; visitors
+   can still bring their own key.
 
-### A note on the bring-your-own-key design
-A visitor's key lives **only** in `st.session_state` and is passed per request as
-`api_key=…` straight to LiteLLM. It is **never** written to `os.environ` — Streamlit Cloud
-runs one shared process for all visitors, so a process-global key would leak across
-concurrent sessions. See [`statusforge/extract.py`](statusforge/extract.py) (`LLMConfig`)
-and [`narrate.py`](statusforge/narrate.py) for the exact handling.
+**Key safety:** a visitor's key lives only in `st.session_state` and is passed per request as
+`api_key=…` straight to LiteLLM — **never** `os.environ` (Streamlit Cloud shares one process across
+visitors, so a process-global key would leak). See [`statusforge/extract.py`](statusforge/extract.py).
 
 ## Layout
 
 ```
 statusforge/
-  models.py        # TeamSignals + Verdict + ProgramRollup (Pydantic)
-  engine.py        # the deterministic RAG-color rule engine (pure, unit-tested)
-  extract.py       # raw status text -> typed signals (offline mock or LLM)
-  narrate.py       # engine verdict -> grounded prose (cannot change the color)
-  calibration.py   # 3-class ordinal calibration + narrative faithfulness
-  dataset.py       # load the synthetic gold set
-app.py             # Streamlit roll-up app
-data/gold_statuses.jsonl   # 20 synthetic statuses + human color labels
-scripts/run_calibration.py # -> docs/calibration.md + docs/calibration.png
-tests/             # 26 offline tests (engine + calibration + pipeline)
+  rulebook.py      # load + validate a rulebook (whitelisted ops, fail-closed)
+  engine.py        # pure interpreter: (signals, rulebook) -> color  (Verdict, ProgramRollup)
+  models.py        # signal validation, spec-driven from the rulebook
+  extract.py       # status text -> validated signals (offline reader or LLM); LLMConfig
+  narrate.py       # verdict -> grounded prose; silent offline fallback on live failure
+  calibration.py   # ordinal cost-asymmetric eval + narrative faithfulness
+  dataset.py       # per-domain gold sets
+  providers.py     # provider catalog + owner-key (st.secrets) resolver
+app.py             # Streamlit: Demo / Use your own key / How it works / Eval
+rulebooks/         # software.yaml, marketing.yaml  (write your own domain)
+data/              # gold_statuses.jsonl (software) + marketing_gold.jsonl
+scripts/run_calibration.py   # per-domain calibration -> docs/
+tests/             # 36 offline tests (engine, rulebook fail-closed, extraction, fallback)
 ```
 
 ## Honest scope
 
-Working app + eval harness, not a product. Synthetic data only, no integrations, no real
-program data. The mock extractor is a transparent keyword/regex reader (reproducible, not
-clever); real extraction uses an LLM via LiteLLM. The point is the *architecture* — a
-health call you can audit — and the *eval* that proves it.
+Working app + eval harness, not a product. Synthetic data only, no integrations. The offline free-text
+reader is best-effort (a real deployment would use structured import or the LLM extractor + the editable
+table). The point is the **architecture** — an auditable, configurable health call — and the **eval** that
+proves it, honestly separating engine correctness from extraction.
 
 ---
 
