@@ -33,7 +33,7 @@ DOCS = Path(__file__).resolve().parent.parent / "docs"
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--domain", default="software", choices=["software", "marketing"])
+    ap.add_argument("--domain", default="program", choices=["program", "software", "marketing"])
     ap.add_argument("--provider", default="offline", choices=["offline", "auto"])
     ap.add_argument("--model", default=None)
     args = ap.parse_args()
@@ -45,10 +45,13 @@ def main() -> None:
                or os.getenv("OPENAI_API_KEY") or "")
         cfg = LLMConfig(model=args.model or "groq/llama-3.3-70b-versatile", api_key=key)
 
+    from statusforge.models import validate_signals
     gold = load_gold(args.domain)
     y_true, y_pred, colors, narratives = [], [], [], []
     for row in gold:
-        signals = extract_signals(row["text"], rb, cfg)
+        # Numeric-signal gold (grid domains) skips extraction; text gold extracts.
+        signals = (validate_signals(row["signals"], rb) if "signals" in row
+                   else extract_signals(row["text"], rb, cfg))
         v = evaluate_team(row["team"], signals, rb)
         v.narrative, _ = narrate(v, cfg)
         y_true.append(row["human_color"]); y_pred.append(v.color)
@@ -92,14 +95,33 @@ def _maybe_plot(domain, domain_label, report, faith) -> None:
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.2))
     fig.patch.set_facecolor("#0e1320")
     m = report.confusion
-    ax1.imshow(m, cmap="magma")
-    ax1.set_xticks(range(3), [f"pred {c}" for c in CLASSES], color="#e8edf6", fontsize=8)
-    ax1.set_yticks(range(3), [f"true {c}" for c in CLASSES], color="#e8edf6", fontsize=8)
+    n = report.n or 1
+    # Readable matrix: correct cells (diagonal) green-tinted, errors red-tinted,
+    # intensity by count; dark text on light cells so numbers are always legible.
+    import matplotlib.colors as mcolors
+    rgba = [[(0, 0, 0, 0)] * 3 for _ in range(3)]
     for i in range(3):
         for j in range(3):
-            ax1.text(j, i, str(m[i][j]), ha="center", va="center", color="white",
-                     fontsize=15, fontweight="bold")
+            frac = m[i][j] / n
+            if m[i][j] == 0:
+                rgba[i][j] = (1, 1, 1, 0.04)                       # near-empty
+            elif i == j:
+                rgba[i][j] = (0.37, 0.92, 0.83, 0.25 + 0.6 * frac)  # teal = correct
+            else:
+                rgba[i][j] = (0.98, 0.45, 0.45, 0.30 + 0.6 * frac)  # red = error
+    ax1.imshow(rgba)
+    ax1.set_xticks(range(3), [f"pred {c}" for c in CLASSES], color="#e8edf6", fontsize=9)
+    ax1.set_yticks(range(3), [f"true {c}" for c in CLASSES], color="#e8edf6", fontsize=9)
+    ax1.set_xticks([x - 0.5 for x in range(1, 3)], minor=True)
+    ax1.set_yticks([y - 0.5 for y in range(1, 3)], minor=True)
+    ax1.grid(which="minor", color="#243049", linewidth=1)
+    for i in range(3):
+        for j in range(3):
+            ax1.text(j, i, str(m[i][j]), ha="center", va="center",
+                     color="#0e1320" if m[i][j] else "#4a5568", fontsize=16, fontweight="bold")
     ax1.set_title(f"Engine vs human — {domain_label}", color="#5eead4")
+    for sp in ax1.spines.values():
+        sp.set_color("#243049")
     names = ["exact\nagreement", "quad.\nkappa", "danger\nrate", "narrative\nfaithful"]
     vals = [report.exact_agreement, report.quadratic_kappa, report.danger_rate, faith]
     ax2.bar(names, vals, color=["#5eead4", "#9b85ff", "#fbbf77", "#5eead4"])

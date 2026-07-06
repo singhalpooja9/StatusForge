@@ -11,7 +11,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # The interactive app + real-LLM narrator. Tests/CI don't need these (fully offline).
-app = ["streamlit>=1.36", "pandas>=2.0", "litellm>=1.70"]
+app = ["streamlit>=1.49", "pandas>=2.0", "litellm>=1.70"]
 dev = ["pytest>=7.0", "matplotlib>=3.7", "scikit-learn>=1.3", "numpy>=1.24"]
 
 [tool.pytest.ini_options]

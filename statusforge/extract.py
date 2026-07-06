@@ -36,7 +36,10 @@ OFFLINE = LLMConfig(api_key="")
 
 
 # --------------------------------------------------------------- offline read ---
-def _first_int(pattern: str, text: str, default: int = 0) -> int:
+def _first_int(pattern: str, text: str, default=None):
+    """First integer captured by `pattern`, or `default` (None = "not found") if no
+    match. Returning None — not 0 — lets the caller OMIT a signal the text never
+    mentioned, so a missing value never masquerades as a real 0 downstream."""
     m = re.search(pattern, text, re.IGNORECASE)
     return int(m.group(1)) if m else default
 
@@ -65,7 +68,8 @@ def _offline_extract(text: str, rb: Rulebook) -> dict:
             else _first_int(r"(\d+)\s*(?:unowned|ownerless)", t))
     if has("scope_delta_pct"):
         ms = re.search(r"scope[^0-9+-]{0,16}([+-]?\d+)\s*%", t)
-        raw["scope_delta_pct"] = float(ms.group(1)) if ms else 0.0
+        if ms:
+            raw["scope_delta_pct"] = float(ms.group(1))   # else: omit (not provided)
     if has("milestones_total") or has("milestones_hit"):
         raw.update(_extract_of_pair(t, "milestone", "milestones_total", "milestones_hit"))
 
@@ -78,7 +82,10 @@ def _offline_extract(text: str, rb: Rulebook) -> dict:
     if has("budget_overrun_pct"):
         mo = re.search(r"budget\s*(\d+)\s*%\s*over", t)
         mu = re.search(r"budget\s*(\d+)\s*%\s*under", t)
-        raw["budget_overrun_pct"] = float(mo.group(1)) if mo else (-float(mu.group(1)) if mu else 0.0)
+        if mo:
+            raw["budget_overrun_pct"] = float(mo.group(1))
+        elif mu:
+            raw["budget_overrun_pct"] = -float(mu.group(1))   # else: omit (not provided)
     if has("assets_total") or has("assets_ready"):
         pair = _extract_of_pair(t, "asset", "assets_total", "assets_ready")
         # "9 of 30 assets NOT ready" means ready = total - 9
@@ -90,22 +97,30 @@ def _offline_extract(text: str, rb: Rulebook) -> dict:
     if has("days_to_launch"):
         raw["days_to_launch"] = _first_int(r"(\d+)\s*days?\s*(?:to|out|until|before)", t)
 
-    # generic fallback for any other declared signal: "<n> <first word of name>"
+    # generic fallback for any other declared signal: "<n> <first word of name>".
+    # If the text never mentions it, leave it OUT (don't write 0) so validate_signals
+    # treats it as "not provided" and the engine skips its rules.
     for sig in rb.signals:
         if sig.name in raw:
             continue
         word = sig.name.split("_")[0]
-        raw[sig.name] = _first_int(rf"(\d+)\s*{re.escape(word)}", t)
-    return raw
+        found = _first_int(rf"(\d+)\s*{re.escape(word)}", t)
+        if found is not None:
+            raw[sig.name] = found
+    return {k: v for k, v in raw.items() if v is not None}
 
 
 def _extract_of_pair(t: str, noun: str, total_key: str, hit_key: str) -> dict:
-    """'3 of 5 <noun>s' -> {total:5,hit:3}; 'all 4 <noun>s' -> {total:4,hit:4}."""
+    """'3 of 5 <noun>s' -> {total:5,hit:3}; 'all 4 <noun>s' -> {total:4,hit:4}.
+    Returns {} when the text never mentions <noun> — so the pair stays "not provided"
+    (the derived rule needs BOTH operands and is skipped) rather than a phantom 0."""
     m = re.search(rf"(\d+)\s*(?:of|/)\s*(\d+)\s*(?:creative\s*)?{noun}", t)
     if m:
         hit, total = int(m.group(1)), int(m.group(2))
     else:
         total = _first_int(rf"(?:all\s*)?(\d+)\s*(?:creative\s*)?{noun}", t)
+        if total is None:
+            return {}
         hit = total if ("all" in t and noun in t) else 0
     return {total_key: total, hit_key: min(hit, total) if total else hit}
 
@@ -115,8 +130,10 @@ def _extract_instructions(rb: Rulebook) -> str:
     fields = ", ".join(s.name for s in rb.signals)
     return (
         f"Extract program-health SIGNALS from a team's status update for the domain "
-        f"'{rb.domain}'. Return ONLY JSON with these numeric fields: {fields}. Use 0 "
-        f"when unstated. Do NOT judge health or assign any color — only pull the numbers.")
+        f"'{rb.domain}'. Return ONLY JSON with numeric values for these fields: {fields}. "
+        f"OMIT any field the update does not state — do NOT guess and do NOT fill 0 for a "
+        f"missing value (0 is a real measurement, not 'unknown'). Do NOT judge health or "
+        f"assign any color — only pull the numbers that are actually stated.")
 
 
 def _real_extract(text: str, rb: Rulebook, cfg: LLMConfig) -> dict:

@@ -1,0 +1,56 @@
+# StatusForge rulebook — the simple default (works for most teams / any program).
+#
+# Four plain-English signals anyone recognizes. The color is a pure function of these
+# numbers — computed by rule, never guessed by AI. Labels match the grid column
+# headers so the app maps them automatically. Extra columns a user adds are shown and
+# fed to the summary, but do NOT affect the color.
+
+domain: Program status
+
+signals:
+  - name: blockers
+    label: "Blockers"
+    help: "Things currently blocking the team"
+  - name: percent_complete
+    label: "% Complete"
+    help: "How far to done (0-100)"
+  - name: days_behind
+    label: "Days Behind"
+    help: "Days behind schedule (0 = on time)"
+  - name: critical_issues
+    label: "Critical Issues"
+    help: "Open urgent/critical issues (P1s, fires, escalations)"
+
+rules:
+  # --- RED (escalate) ---
+  - color: Red
+    signal: critical_issues
+    op: ">="
+    value: 1
+    reason: "{n} critical issue(s) open"
+  - color: Red
+    signal: days_behind
+    op: ">="
+    value: 5
+    reason: "{n} days behind schedule"
+  - color: Red
+    signal: blockers
+    op: ">="
+    value: 3
+    reason: "{n} blockers piling up"
+  # --- AMBER (watch) ---
+  - color: Amber
+    signal: days_behind
+    op: ">="
+    value: 2
+    reason: "{n} days behind"
+  - color: Amber
+    signal: blockers
+    op: ">="
+    value: 1
+    reason: "{n} blocker(s)"
+  - color: Amber
+    signal: percent_complete
+    op: "<="
+    value: 20
+    reason: "only {n}% complete"

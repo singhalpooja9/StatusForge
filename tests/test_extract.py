@@ -52,10 +52,10 @@ def test_narrate_fallback_on_live_failure(monkeypatch):
     def boom(v, cfg):
         raise RuntimeError("groq 429")
     monkeypatch.setattr(N, "_real_narrate", boom)
-    v = Verdict(team="T", color="Red", reasons=["2 open P1(s)"], signals={})
+    v = Verdict(team="T", color="Red", reasons=["2 open P1s"], signals={})
     text, used_live = N.narrate(v, LLMConfig(api_key="sk-fake"))
-    assert used_live is False           # fell back
-    assert "Red" in text and text       # got offline prose, not a crash
+    assert used_live is False                       # fell back
+    assert text and "P1s" in text and "risk" in text.lower()   # real offline prose, not a crash
 
 
 def test_gold_pipeline_faithful_and_reasonable():

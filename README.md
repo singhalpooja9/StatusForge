@@ -72,11 +72,17 @@ accuracy.
 | Software (n=20) | 0.95 | 0.96 | **0.00** | 1.00 |
 | Marketing (n=16) | 0.69 | 0.79 | 0.33 | 1.00 |
 
-**The honest engine-vs-extraction split:** the rulebook interpreter is *perfect* on both domains —
-every remaining marketing miss is the **offline free-text reader** failing to parse marketing prose,
-not an engine error. That's the point: the engine generalizes; a regex reader doesn't. For
-non-software domains the LLM extractor (or the editable table) closes the gap. Small gold sets → wide
-CIs; this demonstrates the method, not a production benchmark.
+**What the numbers actually say (two honest layers):**
+- **The engine is deterministic — same numbers, same color, always.** Given signals, the color is a pure
+  function of the rulebook; there is nothing to drift, and any verdict re-derives by hand from the YAML.
+- **Where it disagrees with a human, that's a threshold *choice*, not a bug.** On the marketing gold set
+  the rule matched the human on ~11/16 (danger rate 0.33). Checking each miss, the *numbers were extracted
+  correctly* — the gaps are places where the shipped thresholds don't match how that labeler weighed
+  things. That's the point of a **rulebook you edit**: the disagreement is visible and tunable in YAML, not
+  hidden in a model. (In the software domain, the misses are the free-text *reader* instead — which is why
+  the grid lets you correct every number before the engine rules.)
+
+Small gold sets → wide CIs; this demonstrates the method, not a production benchmark.
 
 ## What this demonstrates (concepts + stack)
 

@@ -7,8 +7,10 @@ marketing launch or a construction schedule identically — the governance skele
 (team, color precedence Red>Amber>Green, worst-team rollup) stays fixed; only the
 domain rules change.
 
-`signals` is a plain dict {signal_name: number}. Validation that the dict matches
-the rulebook lives in models.build_signal_model(); here we assume a validated dict.
+`signals` is a plain dict {signal_name: number} of ONLY the signals a human actually
+provided; a signal that is absent means "not provided", and every rule on it is
+skipped (never evaluated against a phantom 0). Validation/cleaning of the dict lives
+in models.validate_signals(); here we assume an already-validated dict.
 """
 
 from __future__ import annotations
@@ -42,13 +44,32 @@ class ProgramRollup:
     summary: str = ""
 
 
+import re as _re
+
+
+def _pluralize(text: str, *, plural: bool) -> str:
+    """Resolve inline pluralization markers by count. Two markers are supported so a
+    reason template reads naturally at n==1 and n!=1:
+      * 'issue(s)'  -> 'issue'  / 'issues'   (regular; stem may be alphanumeric, so
+                       'P1(s)' -> 'P1' / 'P1s' also works)
+      * 'dependency(ies)' -> 'dependency' / 'dependencies'  (y->ies plural)
+    Run the '(ies)' rule first so it doesn't collide with the '(s)' rule."""
+    text = _re.sub(r"(\w+)y\(ies\)",
+                   lambda m: m.group(1) + ("ies" if plural else "y"), text)
+    text = _re.sub(r"(\w+)\(s\)",
+                   lambda m: m.group(1) + ("s" if plural else ""), text)
+    return text
+
+
 def _fmt(reason: str, *, signal: str = "", op: str = "", value: float = 0, n: float = 0) -> str:
-    """Fill a rule's reason template. {n} = the signal's value; also {signal}/{op}/{value}."""
+    """Fill a rule's reason template. {n} = the signal's value; also {signal}/{op}/{value}.
+    Resolves pluralization markers ('issue(s)', 'P1(s)', 'dependency(ies)') by n."""
     n_str = f"{n:g}"
     try:
-        return reason.format(n=n_str, signal=signal, op=op, value=f"{value:g}")
+        out = reason.format(n=n_str, signal=signal, op=op, value=f"{value:g}")
     except (KeyError, IndexError):
-        return reason
+        out = reason
+    return _pluralize(out, plural=abs(n) != 1)
 
 
 def evaluate_team(team: str, signals: dict[str, float], rulebook: Rulebook | str) -> Verdict:
@@ -57,16 +78,22 @@ def evaluate_team(team: str, signals: dict[str, float], rulebook: Rulebook | str
 
     fired: dict[str, list[str]] = {"Red": [], "Amber": [], "Green": []}
 
-    # plain single-signal rules
+    # plain single-signal rules — a signal that was NOT provided is skipped, never
+    # treated as 0. A blank cell means "no data", so its rules simply don't fire
+    # (and aren't mentioned); a genuinely-entered 0 is present in `signals` and fires.
     for rule in rb.rules:
-        val = float(signals.get(rule.signal, 0))
+        if rule.signal not in signals:
+            continue
+        val = float(signals[rule.signal])
         if OPERATORS[rule.op](val, rule.value):
             fired[rule.color].append(_fmt(rule.reason, signal=rule.signal, op=rule.op,
                                           value=rule.value, n=val))
-    # derived rules (e.g. milestone miss %)
+    # derived rules (e.g. milestone miss %) — need BOTH operands provided.
     for d in rb.derived_rules:
-        total = float(signals.get(d.total, 0))
-        hit = float(signals.get(d.hit, 0))
+        if d.total not in signals or d.hit not in signals:
+            continue
+        total = float(signals[d.total])
+        hit = float(signals[d.hit])
         if total > 0:
             miss_pct = 100.0 * (total - hit) / total
             if OPERATORS[d.op](miss_pct, d.value):
