@@ -124,10 +124,10 @@ statusforge/
   dataset.py       # per-domain gold sets
   providers.py     # provider catalog + owner-key (st.secrets) resolver
 app.py             # Streamlit: Demo / Use your own key / How it works / Eval
-rulebooks/         # software.yaml, marketing.yaml  (write your own domain)
-data/              # gold_statuses.jsonl (software) + marketing_gold.jsonl
+rulebooks/         # program.yaml (default), software.yaml, marketing.yaml  (write your own domain)
+data/              # per-domain gold sets (program / software / marketing)
 scripts/run_calibration.py   # per-domain calibration -> docs/
-tests/             # 36 offline tests (engine, rulebook fail-closed, extraction, fallback)
+tests/             # 53 offline tests (engine, rulebook fail-closed, extraction, missing-signal, fallback)
 ```
 
 ## Honest scope
@@ -136,6 +136,10 @@ Working app + eval harness, not a product. Synthetic data only, no integrations.
 reader is best-effort (a real deployment would use structured import or the LLM extractor + the editable
 table). The point is the **architecture** — an auditable, configurable health call — and the **eval** that
 proves it, honestly separating engine correctness from extraction.
+
+## License
+
+[MIT](LICENSE) — free to use, adapt, and build on.
 
 ---
 

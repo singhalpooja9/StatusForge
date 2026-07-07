@@ -46,7 +46,7 @@ def test_missing_percent_does_not_add_reason_to_amber_team():
     # 2 days behind (Amber) with % Complete missing: the ONLY reason is the slip.
     v = evaluate_team("Data", {"days_behind": 2, "blockers": 0, "critical_issues": 0}, RB)
     assert v.color == "Amber"
-    assert v.reasons == ["2 days behind"]         # no phantom "only 0% complete"
+    assert v.reasons == ["2 days behind schedule"]   # no phantom "only 0% complete"
 
 
 def test_typed_low_percent_still_fires():
@@ -62,7 +62,7 @@ def test_offline_extract_omits_unmentioned_signals():
     sig = extract_signals("2 days behind schedule this week", RB)
     assert "percent_complete" not in sig
     assert sig.get("days_behind") == 2.0
-    assert evaluate_team("Data", sig, RB).reasons == ["2 days behind"]
+    assert evaluate_team("Data", sig, RB).reasons == ["2 days behind schedule"]
 
 
 # --------------------------------------------------------------------- pluralization ---

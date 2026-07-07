@@ -43,7 +43,7 @@ rules:
     signal: days_behind
     op: ">="
     value: 2
-    reason: "{n} days behind"
+    reason: "{n} days behind schedule"
   - color: Amber
     signal: blockers
     op: ">="
